@@ -152,8 +152,7 @@ with st.sidebar:
     st.caption("Made with ❤️ by Hassanelb")
 
 # Main content with collapsible expanders
-st.title("ImageNest")
-st.title("CSV/Excel Image Embedder")
+st.title("ImageNest: CSV/Excel Image Embedder")
 st.markdown("Embed images from URLs into your spreadsheets for Canva compatibility. Upload a file, select a column, and download the result.")
 
 # Expander for File Upload
