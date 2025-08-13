@@ -6,6 +6,7 @@ from openpyxl.drawing.image import Image
 import os
 import tempfile
 from io import BytesIO
+from PIL import Image as PILImage
 
 # Custom CSS for modern dark mode design
 st.markdown("""
@@ -98,18 +99,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Function to download image
+# Function to download and compress image
 def download_image(url, temp_dir):
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
-        file_path = os.path.join(temp_dir, os.path.basename(url.split('?')[0]))
-        with open(file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+        # Load image with Pillow
+        img_data = BytesIO(response.content)
+        img = PILImage.open(img_data)
+        # Convert to RGB if necessary (e.g., for PNG with transparency)
+        if img.mode in ('RGBA', 'LA'):
+            img = img.convert('RGB')
+        # Resize to max 800x800 pixels
+        img.thumbnail((800, 800), PILImage.Resampling.LANCZOS)
+        # Save compressed image as JPEG
+        file_name = os.path.basename(url.split('?')[0])
+        if not file_name.lower().endswith(('.jpg', '.jpeg')):
+            file_name = file_name + '.jpg'
+        file_path = os.path.join(temp_dir, file_name)
+        img.save(file_path, 'JPEG', quality=85, optimize=True)
         return file_path
     except Exception as e:
-        st.warning(f"Error downloading {url}: {e}")
+        st.warning(f"Error downloading or processing {url}: {e}")
         return None
 
 # Function to convert CSV to XLSX
@@ -129,22 +140,20 @@ def csv_to_xlsx(file_bytes, temp_dir):
 
 # Sidebar for navigation and settings
 with st.sidebar:
-    st.title("App Settings")
-    st.markdown("Customize sizes and controls")
+    st.title("ImageNest Settings")
+    st.markdown("Customize row and column sizes")
     
     # User controls for sizes
-    img_width = st.slider("Image Width (pixels)", min_value=50, max_value=300, value=100, step=10)
-    img_height = st.slider("Image Height (pixels)", min_value=50, max_value=300, value=100, step=10)
-    row_height = st.slider("Row Height (points)", min_value=40, max_value=200, value=80, step=10)
-    col_width = st.slider("Column Width (characters)", min_value=10, max_value=50, value=20, step=1)
+    row_height = st.slider("Row Height (points)", min_value=40, max_value=400, value=300, step=10)
+    col_width = st.slider("Column Width (characters)", min_value=44, max_value=100, value=44, step=1)
     
     st.markdown("---")
-    st.caption("Modern Image Embedder App v1.0")
+    st.caption("ImageNest v1.0")
     st.caption("Made with ❤️ by Hassanelb")
 
 # Main content with collapsible expanders
-st.title("Modern CSV/Excel Image Embedder")
-st.markdown("Enhance your spreadsheets by embedding images from URLs. Use the sections below to proceed.")
+st.title("ImageNest: CSV/Excel Image Embedder")
+st.markdown("Embed images from URLs into your spreadsheets for Canva compatibility. Upload a file, select a column, and download the result.")
 
 # Expander for File Upload
 with st.expander("Step 1: Upload File", expanded=True):
@@ -218,8 +227,9 @@ if uploaded_file is not None:
                                 image_path = download_image(url, temp_dir)
                                 if image_path:
                                     img = Image(image_path)
-                                    img.width = img_width
-                                    img.height = img_height
+                                    img.width = 300  # Fixed size for Canva compatibility
+                                    img.height = 300
+                                    # Center image in cell
                                     ws.add_image(img, ws.cell(row=row, column=new_image_col).coordinate)
                                     ws.row_dimensions[row].height = row_height
                                 else:
@@ -231,9 +241,13 @@ if uploaded_file is not None:
                         # Adjust column width
                         ws.column_dimensions[ws.cell(row=1, column=new_image_col).column_letter].width = col_width
                         
-                        # Save to BytesIO
+                        # Save to BytesIO and normalize
+                        temp_output = BytesIO()
+                        wb.save(temp_output)
+                        temp_output.seek(0)
+                        wb_temp = load_workbook(temp_output)
                         output = BytesIO()
-                        wb.save(output)
+                        wb_temp.save(output)
                         output.seek(0)
                 
                 # Success message and download
